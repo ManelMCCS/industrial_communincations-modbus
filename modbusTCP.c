@@ -1,8 +1,8 @@
-#include "modbusAP.h"
 #include "modbusTCP.h"
 
 #define protocolID 0 // é zero para o modbus
 #define unitID 1
+#define APDU_MAX_LEN 128
 
 uint8_t transID;
 
@@ -11,20 +11,20 @@ int Send_Modbus_request(char *server_add, unsigned int port, uint8_t *APDU, uint
     printf("SEND!\n");
 
     // uint8_t PDU[255], MBAP_R[7];
-    int len = 0, i = 0, PDUlen = 0;
+    int len = 0;
 
     // check consistency of parameters
 
     if (server_add == NULL)
         return -1;
 
-    else if (port < port_MIN || port > port_MAX)
+    else if (port < 0 || port > PORT_MAX_N)
         return -1;
 
     else if (APDU == NULL)
         return -1;
 
-    else if (APDUlen > APDU_MAX)
+    else if (APDUlen > APDU_MAX_LEN)
         return -1;
 
     // opens TCP client socket and connects to server
@@ -91,14 +91,6 @@ int Send_Modbus_request(char *server_add, unsigned int port, uint8_t *APDU, uint
         return -1;
     }
 
-    printf("[TCP] Message send to slave: ");
-    for (int k = 0; k < 7; k++)
-        printf("MBAP[%.2x]=%.2x\n", k, MBAP[k]);
-    for (int k = 0; k < APDUlen; k++)
-        printf("APDU[%.2x]=%.2x\n", k, APDU[k]);
-    printf("\n");
-    // if response, remove MBAP, PDU_R → APDU_R
-
     int r_mbap = read(Csocket, MBAP, 7);
     if (r_mbap < 0)
     {
@@ -110,25 +102,20 @@ int Send_Modbus_request(char *server_add, unsigned int port, uint8_t *APDU, uint
         printf("MBAP[%.2x]=%.2x\n", k, MBAP[k]);
 
     // tamanho da resposta
-    static int lenR = 0;
+    int response_len = 3;
 
-    lenR = (int)((MBAP[4] << 8) + MBAP[5]);
+    // FIX THIS
+    // TODO
+    if (0x10 != APDU[0])
+    {
+        response_len = (int)((MBAP[4] << 8) + MBAP[5]);
+    }
 
-    int ra = read(Csocket, APDU_R, lenR - 1);
-    if (ra < 0)
+    if (read(Csocket, APDU_R, response_len - 1) < 0)
     {
         printf("[-] ERRO NA LEITURA(APDU)\n");
         return -1;
     }
-
-    printf("[TCP] Message received from slave:");
-    for (int k = 0; k < 7; k++)
-        printf("MBAP[%.2x]=%.2x\n", k, MBAP[k]);
-    for (int q = 0; q < lenR; q++)
-        printf("APDU_R[%.2x]=%.2x\n", q, APDU_R[q]);
-    printf("\n");
-
-    // closes TCP client socket with server
 
     close(Csocket);
     return 0;
