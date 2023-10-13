@@ -1,18 +1,11 @@
 #include "modbusTCP.h"
 
 #define protocolID 0 // é zero para o modbus
-#define unitID 1
+#define UNIT_ID 51
 #define APDU_MAX_LEN 128
-
-uint8_t transID;
 
 int Send_Modbus_request(char *server_add, unsigned int port, uint8_t *APDU, uint16_t APDUlen, uint8_t *APDU_R)
 {
-    printf("SEND!\n");
-
-    // uint8_t PDU[255], MBAP_R[7];
-    int len = 0;
-
     // check consistency of parameters
 
     if (server_add == NULL)
@@ -38,7 +31,6 @@ int Send_Modbus_request(char *server_add, unsigned int port, uint8_t *APDU, uint
 
     if (Csocket < 0)
     {
-        printf("[-] ERRO A CRIAR O SOCKET\n");
         return -1;
     }
 
@@ -48,59 +40,42 @@ int Send_Modbus_request(char *server_add, unsigned int port, uint8_t *APDU, uint
 
     if (connect(Csocket, (struct sockaddr *)&cAD, cADsize) < 0)
     {
-        printf("Failed to connect\n");
         return -1;
     }
-    printf("Successful connection\n");
-    // generates TI (trans.ID →sequence number)
+    static uint8_t transaction_identifier = 0;
 
-    transID++;
-    // printf("TRANS ID: %d", (transID>>8));
+    transaction_identifier++;
     //  assembles PDU = MBAP+APDU
 
     unsigned char MBAP[7];
 
-    len = APDUlen + 1;
+    int len = APDUlen + 1;
 
-    MBAP[0] = (uint8_t)(transID >> 8);
-    MBAP[1] = (uint8_t)(transID & 0xFF);
+    MBAP[0] = (uint8_t)(transaction_identifier >> 8);
+    MBAP[1] = (uint8_t)(transaction_identifier & 0xFF);
     MBAP[2] = 0x00;
     MBAP[3] = 0x00;
     MBAP[4] = (uint8_t)(len >> 8);
     MBAP[5] = (uint8_t)(len & 0xFF);
-    MBAP[6] = unitID;
-
-    printf("[TCP]: MBAP\n");
-    for (int k = 0; k < 7; k++)
-        printf("MBAP[%.2x]=%.2x\n", k, MBAP[k]);
-    printf("\n");
+    MBAP[6] = UNIT_ID;
 
     // escrever MBAP (cabeçalho PDU)
-    int w_mbap = write(Csocket, MBAP, 7);
-    if (w_mbap < 0)
+    if (write(Csocket, MBAP, 7) < 0)
     {
-        printf("[-] ERRO NA ESCRITA MBAP\n");
+        // printf("[-] ERRO NA ESCRITA MBAP\n");
         return -1;
     }
 
     // escrever APDU (payload PDU)
-    int w_apdu = write(Csocket, APDU, APDUlen);
-    if (w_apdu < 0)
+    if (write(Csocket, APDU, APDUlen) < 0)
     {
-        printf("[-] ERRO NA ESCRITA APDU\n");
         return -1;
     }
 
-    int r_mbap = read(Csocket, MBAP, 7);
-    if (r_mbap < 0)
+    if (read(Csocket, MBAP, 7) < 0)
     {
-        printf("[-] ERRO NA LEITURA(MBAP)\n");
         return -1;
     }
-    printf("[TCP] Message received from slave:");
-    for (int k = 0; k < 7; k++)
-        printf("MBAP[%.2x]=%.2x\n", k, MBAP[k]);
-
     // tamanho da resposta
     int response_len = 3;
 
@@ -113,7 +88,6 @@ int Send_Modbus_request(char *server_add, unsigned int port, uint8_t *APDU, uint
 
     if (read(Csocket, APDU_R, response_len - 1) < 0)
     {
-        printf("[-] ERRO NA LEITURA(APDU)\n");
         return -1;
     }
 
